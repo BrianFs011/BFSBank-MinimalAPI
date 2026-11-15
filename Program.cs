@@ -203,3 +203,6 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult(false);
     }
 }
+
+public partial class Program { }
+

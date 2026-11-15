@@ -22,6 +22,11 @@ dotnet run --launch-profile https
 * **URL HTTPS:** `https://localhost:7021`
 * **Endpoint de teste:** `https://localhost:7021/weatherforecast`
 
+### 3. Rodar a Suíte de Testes Unitários & Integração (xUnit)
+```bash
+dotnet test
+```
+
 ---
 
 ## 🏛️ Características do Paradigma
