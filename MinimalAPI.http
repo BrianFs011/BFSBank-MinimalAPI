@@ -1,11 +1,12 @@
 @HostAddress = https://localhost:7021
 
-### 1. Criar Usuário (POST)
+### 1. Criar Usuário com Senha (POST)
 POST {{HostAddress}}/users
 Content-Type: application/json
 
 {
-  "username": "brian"
+  "username": "brian",
+  "password": "MinhaSenhaForte123!"
 }
 
 ### 2. Tentar Criar Usuário Duplicado (POST - Deve retornar 409 Conflict)
@@ -13,7 +14,8 @@ POST {{HostAddress}}/users
 Content-Type: application/json
 
 {
-  "username": "brian"
+  "username": "brian",
+  "password": "OutraSenha123!"
 }
 
 ### 3. Criar Segundo Usuário (POST)
@@ -21,10 +23,11 @@ POST {{HostAddress}}/users
 Content-Type: application/json
 
 {
-  "username": "alice"
+  "username": "alice",
+  "password": "SenhaAlice789!"
 }
 
-### 4. Listar Todos os Usuários (GET)
+### 4. Listar Todos os Usuários (GET - Senha e ID nunca são expostos)
 GET {{HostAddress}}/users
 Accept: application/json
 
@@ -32,12 +35,13 @@ Accept: application/json
 GET {{HostAddress}}/users/brian
 Accept: application/json
 
-### 6. Atualizar Username (PUT)
+### 6. Atualizar Username e/ou Senha (PUT)
 PUT {{HostAddress}}/users/brian
 Content-Type: application/json
 
 {
-  "newUsername": "brian_silva"
+  "newUsername": "brian_silva",
+  "newPassword": "NovaSenhaSegura456!"
 }
 
 ### 7. Consultar Novo Username Atualizado (GET)

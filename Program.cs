@@ -35,12 +35,17 @@ app.UseHttpsRedirection();
 var usersGroup = app.MapGroup("/users")
     .WithTags("Users");
 
-// 1. POST /users - Criar Usuário
+// 1. POST /users - Criar Usuário (com Username e Password)
 usersGroup.MapPost("/", async (CreateUserRequest request, IUserRepository repository) =>
 {
     if (string.IsNullOrWhiteSpace(request.Username))
     {
         return Results.BadRequest(new { error = "O nome de usuário (username) é obrigatório." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest(new { error = "A senha (password) é obrigatória." });
     }
 
     var trimmedUsername = request.Username.Trim();
@@ -50,7 +55,7 @@ usersGroup.MapPost("/", async (CreateUserRequest request, IUserRepository reposi
         return Results.Conflict(new { error = $"O nome de usuário '{trimmedUsername}' já está em uso." });
     }
 
-    var user = await repository.CreateAsync(trimmedUsername);
+    var user = await repository.CreateAsync(trimmedUsername, request.Password);
     var response = new UserResponse(user.Username, user.CreatedAt);
 
     return Results.Created($"/users/{user.Username}", response);
@@ -79,31 +84,34 @@ usersGroup.MapGet("/{username}", async (string username, IUserRepository reposit
 })
 .WithName("GetUserByUsername");
 
-// 4. PUT /users/{username} - Atualizar Nome de Usuário
+// 4. PUT /users/{username} - Atualizar Usuário (Nome de Usuário e/ou Senha)
 usersGroup.MapPut("/{username}", async (string username, UpdateUserRequest request, IUserRepository repository) =>
 {
-    if (string.IsNullOrWhiteSpace(request.NewUsername))
+    if (string.IsNullOrWhiteSpace(request.NewUsername) && string.IsNullOrWhiteSpace(request.NewPassword))
     {
-        return Results.BadRequest(new { error = "O novo nome de usuário (newUsername) é obrigatório." });
+        return Results.BadRequest(new { error = "Pelo menos um campo (newUsername ou newPassword) deve ser informado." });
     }
 
     var currentUsername = username.Trim();
-    var newUsername = request.NewUsername.Trim();
-
     var existingUser = await repository.GetByUsernameAsync(currentUsername);
     if (existingUser is null)
     {
         return Results.NotFound(new { error = $"Usuário '{currentUsername}' não encontrado." });
     }
 
-    // Se o novo nome já pertence a outro usuário
-    if (!string.Equals(currentUsername, newUsername, StringComparison.OrdinalIgnoreCase) &&
-        await repository.ExistsAsync(newUsername))
+    string finalUsername = currentUsername;
+    if (!string.IsNullOrWhiteSpace(request.NewUsername))
     {
-        return Results.Conflict(new { error = $"O novo nome de usuário '{newUsername}' já está em uso." });
+        var trimmedNewUsername = request.NewUsername.Trim();
+        if (!string.Equals(currentUsername, trimmedNewUsername, StringComparison.OrdinalIgnoreCase) &&
+            await repository.ExistsAsync(trimmedNewUsername))
+        {
+            return Results.Conflict(new { error = $"O novo nome de usuário '{trimmedNewUsername}' já está em uso." });
+        }
+        finalUsername = trimmedNewUsername;
     }
 
-    var updatedUser = await repository.UpdateUsernameAsync(currentUsername, newUsername);
+    var updatedUser = await repository.UpdateAsync(currentUsername, finalUsername, request.NewPassword);
     return Results.Ok(new UserResponse(updatedUser!.Username, updatedUser.CreatedAt));
 })
 .WithName("UpdateUser");
@@ -125,17 +133,18 @@ app.Run();
 
 // -------------------------------------------------------------
 // DOMÍNIO & DTOs
-// O cliente nunca recebe nem precisa conhecer o ID interno (GUID)
+// Invariante de Segurança: O cliente nunca recebe o ID interno (GUID) nem a senha
 // -------------------------------------------------------------
 public sealed class User
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }
 
-public record CreateUserRequest(string Username);
-public record UpdateUserRequest(string NewUsername);
+public record CreateUserRequest(string Username, string Password);
+public record UpdateUserRequest(string? NewUsername, string? NewPassword = null);
 public record UserResponse(string Username, DateTime CreatedAt);
 
 // -------------------------------------------------------------
@@ -146,8 +155,8 @@ public interface IUserRepository
     Task<bool> ExistsAsync(string username);
     Task<User?> GetByUsernameAsync(string username);
     Task<IEnumerable<User>> GetAllAsync();
-    Task<User> CreateAsync(string username);
-    Task<User?> UpdateUsernameAsync(string currentUsername, string newUsername);
+    Task<User> CreateAsync(string username, string password);
+    Task<User?> UpdateAsync(string currentUsername, string newUsername, string? newPassword);
     Task<bool> DeleteAsync(string username);
 }
 
@@ -176,12 +185,13 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult<IEnumerable<User>>(_usersById.Values.OrderBy(u => u.CreatedAt).ToList());
     }
 
-    public Task<User> CreateAsync(string username)
+    public Task<User> CreateAsync(string username, string password)
     {
         var user = new User
         {
             Id = Guid.NewGuid(),
             Username = username,
+            Password = password,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -191,16 +201,24 @@ public sealed class InMemoryUserRepository : IUserRepository
         return Task.FromResult(user);
     }
 
-    public Task<User?> UpdateUsernameAsync(string currentUsername, string newUsername)
+    public Task<User?> UpdateAsync(string currentUsername, string newUsername, string? newPassword)
     {
         if (!_idByUsername.TryGetValue(currentUsername, out var id) || !_usersById.TryGetValue(id, out var user))
         {
             return Task.FromResult<User?>(null);
         }
 
-        _idByUsername.TryRemove(currentUsername, out _);
-        user.Username = newUsername;
-        _idByUsername[newUsername] = id;
+        if (!string.Equals(currentUsername, newUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            _idByUsername.TryRemove(currentUsername, out _);
+            user.Username = newUsername;
+            _idByUsername[newUsername] = id;
+        }
+
+        if (!string.IsNullOrWhiteSpace(newPassword))
+        {
+            user.Password = newPassword;
+        }
 
         return Task.FromResult<User?>(user);
     }
@@ -217,4 +235,3 @@ public sealed class InMemoryUserRepository : IUserRepository
 }
 
 public partial class Program { }
-

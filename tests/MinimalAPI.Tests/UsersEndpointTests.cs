@@ -16,11 +16,12 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task CreateUser_ReturnsCreated_WhenUsernameIsValid()
+    public async Task CreateUser_ReturnsCreated_WhenUsernameAndPasswordAreValid()
     {
         // Arrange
         var username = $"valid_user_{Guid.NewGuid():N}";
-        var request = new { username };
+        var password = "SafePassword123!";
+        var request = new { username, password };
 
         // Act
         var response = await _client.PostAsJsonAsync("/users", request);
@@ -35,8 +36,10 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(root.TryGetProperty("username", out var propUsername));
         Assert.Equal(username, propUsername.GetString());
 
-        // Invariante de Segurança: O ID interno NUNCA deve ser exposto ao cliente
+        // Invariantes de Segurança Bancária:
+        // O ID interno e a Senha NUNCA devem ser expostos na resposta HTTP
         Assert.False(root.TryGetProperty("id", out _), "O campo 'id' não deve ser exposto na resposta HTTP.");
+        Assert.False(root.TryGetProperty("password", out _), "O campo 'password' não deve ser exposto na resposta HTTP.");
     }
 
     [Theory]
@@ -45,7 +48,22 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task CreateUser_ReturnsBadRequest_WhenUsernameIsBlank(string username)
     {
         // Arrange
-        var request = new { username };
+        var request = new { username, password = "SafePassword123!" };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/users", request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateUser_ReturnsBadRequest_WhenPasswordIsBlank(string password)
+    {
+        // Arrange
+        var request = new { username = $"user_{Guid.NewGuid():N}", password };
 
         // Act
         var response = await _client.PostAsJsonAsync("/users", request);
@@ -59,7 +77,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         var username = $"duplicate_{Guid.NewGuid():N}";
-        var request = new { username };
+        var request = new { username, password = "Password123!" };
 
         // Act 1: Cria primeira vez
         var firstResponse = await _client.PostAsJsonAsync("/users", request);
@@ -79,11 +97,11 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         var baseName = $"case_user_{Guid.NewGuid():N}";
 
         // Act 1: Cria com minúsculo
-        var firstResponse = await _client.PostAsJsonAsync("/users", new { username = baseName.ToLowerInvariant() });
+        var firstResponse = await _client.PostAsJsonAsync("/users", new { username = baseName.ToLowerInvariant(), password = "Password123!" });
         Assert.Equal(HttpStatusCode.Created, firstResponse.StatusCode);
 
         // Act 2: Tenta com maiúsculo
-        var secondResponse = await _client.PostAsJsonAsync("/users", new { username = baseName.ToUpperInvariant() });
+        var secondResponse = await _client.PostAsJsonAsync("/users", new { username = baseName.ToUpperInvariant(), password = "Password123!" });
 
         // Assert: Deve barrar duplicidade case-insensitive
         Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
@@ -94,7 +112,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         var username = $"get_user_{Guid.NewGuid():N}";
-        await _client.PostAsJsonAsync("/users", new { username });
+        await _client.PostAsJsonAsync("/users", new { username, password = "Password123!" });
 
         // Act
         var response = await _client.GetAsync($"/users/{username}");
@@ -105,6 +123,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         using var doc = JsonDocument.Parse(json);
         Assert.Equal(username, doc.RootElement.GetProperty("username").GetString());
         Assert.False(doc.RootElement.TryGetProperty("id", out _));
+        Assert.False(doc.RootElement.TryGetProperty("password", out _));
     }
 
     [Fact]
@@ -125,7 +144,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         var username = $"list_user_{Guid.NewGuid():N}";
-        await _client.PostAsJsonAsync("/users", new { username });
+        await _client.PostAsJsonAsync("/users", new { username, password = "Password123!" });
 
         // Act
         var response = await _client.GetAsync("/users");
@@ -143,10 +162,10 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         // Arrange
         var oldUsername = $"old_{Guid.NewGuid():N}";
         var newUsername = $"new_{Guid.NewGuid():N}";
-        await _client.PostAsJsonAsync("/users", new { username = oldUsername });
+        await _client.PostAsJsonAsync("/users", new { username = oldUsername, password = "Password123!" });
 
-        // Act: Atualiza username
-        var putResponse = await _client.PutAsJsonAsync($"/users/{oldUsername}", new { newUsername });
+        // Act: Atualiza username e senha
+        var putResponse = await _client.PutAsJsonAsync($"/users/{oldUsername}", new { newUsername, newPassword = "NewSecret456!" });
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
@@ -166,8 +185,8 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         // Arrange
         var userA = $"usera_{Guid.NewGuid():N}";
         var userB = $"userb_{Guid.NewGuid():N}";
-        await _client.PostAsJsonAsync("/users", new { username = userA });
-        await _client.PostAsJsonAsync("/users", new { username = userB });
+        await _client.PostAsJsonAsync("/users", new { username = userA, password = "Password123!" });
+        await _client.PostAsJsonAsync("/users", new { username = userB, password = "Password123!" });
 
         // Act: Tenta renomear userA para userB
         var putResponse = await _client.PutAsJsonAsync($"/users/{userA}", new { newUsername = userB });
@@ -181,7 +200,7 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // Arrange
         var username = $"delete_user_{Guid.NewGuid():N}";
-        await _client.PostAsJsonAsync("/users", new { username });
+        await _client.PostAsJsonAsync("/users", new { username, password = "Password123!" });
 
         // Act: Deleta usuário
         var deleteResponse = await _client.DeleteAsync($"/users/{username}");
