@@ -5,6 +5,17 @@ var builder = WebApplication.CreateBuilder(args);
 // Configuração do OpenAPI / Swagger
 builder.Services.AddOpenApi();
 
+// Configuração de CORS para permitir integração com o Frontend (Nuxt/Vue)
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Registro do repositório em memória como Singleton (thread-safe)
 builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();
 
@@ -15,6 +26,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseCors();
 app.UseHttpsRedirection();
 
 // -------------------------------------------------------------
