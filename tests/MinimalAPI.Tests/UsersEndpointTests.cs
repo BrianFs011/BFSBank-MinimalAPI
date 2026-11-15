@@ -226,5 +226,26 @@ public class UsersEndpointTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Options_UsersEndpoint_ReturnsCorsAllowOriginHeader()
+    {
+        // Arrange: Simula requisição preflight (OPTIONS) enviada pelo navegador do Nuxt em http://localhost:3000
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/users");
+        request.Headers.Add("Origin", "http://localhost:3000");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        // Act
+        using var response = await _client.SendAsync(request);
+
+        // Assert
+        Assert.True(
+            response.StatusCode == HttpStatusCode.NoContent || response.StatusCode == HttpStatusCode.OK,
+            $"Expected 204 or 200 on preflight, but received {response.StatusCode}"
+        );
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"), "Faltando cabeçalho Access-Control-Allow-Origin");
+        Assert.Equal("http://localhost:3000", response.Headers.GetValues("Access-Control-Allow-Origin").First());
+    }
+
     private record UserDto(string Username, DateTime CreatedAt);
 }

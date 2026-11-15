@@ -5,14 +5,23 @@ var builder = WebApplication.CreateBuilder(args);
 // Configuração do OpenAPI / Swagger
 builder.Services.AddOpenApi();
 
-// Configuração de CORS para permitir integração com o Frontend (Nuxt/Vue)
+// Configuração robusta de CORS para o Frontend (Nuxt/Vue em http://localhost:3000)
+const string CorsPolicy = "FrontendPolicy";
 builder.Services.AddCors(options =>
 {
+    options.AddPolicy(CorsPolicy, policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true) // Suporta localhost:3000, 127.0.0.1:3000 e portas dinâmicas
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -26,13 +35,14 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseCors();
+app.UseCors(CorsPolicy);
 app.UseHttpsRedirection();
 
 // -------------------------------------------------------------
 // ENDPOINTS DE USUÁRIOS (4 VERBOS HTTP PRINCIPAIS)
 // -------------------------------------------------------------
 var usersGroup = app.MapGroup("/users")
+    .RequireCors(CorsPolicy)
     .WithTags("Users");
 
 // 1. POST /users - Criar Usuário (com Username e Password)
