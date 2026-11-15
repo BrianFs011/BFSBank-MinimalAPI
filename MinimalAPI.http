@@ -1,11 +1,52 @@
-@MinimalAPI_HostAddress = http://localhost:5051
+@HostAddress = https://localhost:7021
 
-GET {{MinimalAPI_HostAddress}}/openapi/v1.json
+### 1. Criar Usuário (POST)
+POST {{HostAddress}}/users
+Content-Type: application/json
+
+{
+  "username": "brian"
+}
+
+### 2. Tentar Criar Usuário Duplicado (POST - Deve retornar 409 Conflict)
+POST {{HostAddress}}/users
+Content-Type: application/json
+
+{
+  "username": "brian"
+}
+
+### 3. Criar Segundo Usuário (POST)
+POST {{HostAddress}}/users
+Content-Type: application/json
+
+{
+  "username": "alice"
+}
+
+### 4. Listar Todos os Usuários (GET)
+GET {{HostAddress}}/users
 Accept: application/json
 
-###
-
-GET {{MinimalAPI_HostAddress}}/weatherforecast/
+### 5. Buscar Usuário Específico por Username (GET)
+GET {{HostAddress}}/users/brian
 Accept: application/json
 
-###
+### 6. Atualizar Username (PUT)
+PUT {{HostAddress}}/users/brian
+Content-Type: application/json
+
+{
+  "newUsername": "brian_silva"
+}
+
+### 7. Consultar Novo Username Atualizado (GET)
+GET {{HostAddress}}/users/brian_silva
+Accept: application/json
+
+### 8. Deletar Usuário (DELETE)
+DELETE {{HostAddress}}/users/alice
+
+### 9. Confirmar Exclusão (GET - Deve retornar 404 Not Found)
+GET {{HostAddress}}/users/alice
+Accept: application/json
